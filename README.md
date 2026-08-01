@@ -1,97 +1,87 @@
 # GPON-Guard
-### Physical-Layer Security & Anomaly Detection for GPON/EPON Access Networks
 
-A companion security layer to the **ISP Network Monitoring & Fault Detection System**
-(github.com/Praveen-nac/isp-network-monitoring-system). Where that project answers
-*"is the network healthy?"*, GPON-Guard answers *"is something on this network being
-tampered with, spoofed, or attacked?"*
+Statistical Anomaly Detection System for GPON/EPON Networks
 
-## Why this project exists
+## About this project
 
-Most cybersecurity tooling is built for IT systems — servers, cloud, web apps. The access
-layer of a broadband network (OLT, ONUs, the fiber itself) is largely invisible to that
-tooling, even though it's physically reachable by anyone with access to a fiber cabinet,
-splice closet, or roadside cabinet. A field engineer who has spent years racking OLTs and
-splicing fiber sees a different threat surface than a SOC analyst does — that's the gap this
-project is built to demonstrate.
+After building my ISP Network Monitoring & Fault Detection System (see
+github.com/Praveen-nac/isp-network-monitoring-system), I wanted to go a step further. That
+project tells you if the network is healthy. It doesn't tell you if someone is attacking it.
 
-GPON-Guard simulates a realistic 1-OLT / 4-port / 128-ONU access network and layers a
-detection engine on top of it that watches for four scenario classes:
+So I started testing what a security layer for the same kind of network would actually look
+like. Most cybersecurity work out there is built around servers, cloud, and web apps. Almost
+nobody looks at the physical access layer of a broadband network — the OLT, the ONUs, the
+fiber itself — even though I deal with that layer hands-on every day and know how exposed it
+actually is. Anyone with access to a splice closet or a roadside cabinet can physically touch
+it. That gap is what pushed me to build this.
 
-| Scenario | What it models | Detection method |
-|---|---|---|
-| **Rogue ONU** | An unauthorized ONU (unknown serial) attempts to register on a PON port — e.g. an attacker splicing into the fiber to insert their own device | Whitelist check against a registered-serial database |
-| **Signal tampering** | Abrupt, abnormal Rx optical power deviation on a legitimate ONU — consistent with a fiber tap, unauthorized splice, or connector interference | Rolling z-score against each ONU's own historical baseline |
-| **OLT console brute-force** | Repeated failed logins against the OLT's management interface | Rate-based rule (N failures / IP / time window) |
-| **Traffic anomaly** | A single ONU suddenly generating traffic far outside its baseline — compromised CPE used for bandwidth theft or as a DDoS source | Rolling z-score on traffic volume |
+I reused the same stack and the same overall pipeline design from my monitoring project
+(collector -> storage -> API -> dashboard), and on top of that, learning from how that
+project's fault-detection logic worked, I built out a proper detection engine for security
+events instead of just faults.
 
-## Architecture
+## What it actually detects
 
-```
-Simulator thread (simulator.py)
-   |  generates telemetry every tick for a rotating ONU batch
-   |  occasionally injects one of the 4 attack/fault scenarios
-   v
-SQLite (db.py)  <-----lookups----- Detector (detector.py)
-   |  telemetry, alerts, auth_attempts tables       - rule-based checks
-   |                                                  - rolling z-score checks
-   v
-Flask REST API (app.py)  ->  /api/summary  /api/onus  /api/alerts
-   |
-   v
-Live dashboard (templates/index.html + static/app.js)
-   - PON topology view (color-coded by alert severity)
-   - live per-ONU telemetry table
-   - real-time alert feed
-```
+I simulate a realistic access network — 1 OLT, 4 PON ports, 128 ONUs — and inject four kinds
+of attack/tamper scenarios into it to test the detection logic against:
 
-This mirrors the same pipeline shape as the monitoring project (collector → storage → API →
-dashboard) but adds a **detection layer** in between storage and the API — the same pattern
-production intrusion-detection systems use (collect → baseline → flag deviation → alert).
+**Rogue ONU** — an unregistered device tries to join a PON port. This models someone
+splicing into the fiber and inserting their own ONU. Caught with a simple whitelist check
+against known serial numbers.
 
-## Detection approach — why two methods, not one
+**Signal tampering** — a legitimate ONU's Rx optical power suddenly jumps or drops outside
+its normal range, which is what you'd expect from a fiber tap, an unauthorized splice, or
+someone messing with the connector. Caught using a rolling z-score against that ONU's own
+recent history, not a fixed threshold, because normal signal levels vary ONU to ONU.
 
-- **Rule-based** catches known signatures instantly (a rogue serial, a login flood) but only
-  catches what you already thought to write a rule for.
-- **Statistical baseline drift (rolling z-score)** catches things you didn't anticipate — any
-  ONU metric that moves far enough from *its own* recent history gets flagged, regardless of
-  whether it matches a known pattern. This is the same underlying idea as more advanced
-  anomaly-detection methods (e.g. Isolation Forest, One-Class SVM) but implemented in a
-  transparent, explainable way that's easy to reason about and defend.
+**OLT console brute-force** — repeated failed logins against the OLT's management
+interface from the same source in a short window.
 
-Combining both is deliberate: it's the same "signature + anomaly" hybrid design real
-network-security tooling uses, applied to a domain (PON physical layer) that mainstream tools
-don't cover.
+**Traffic anomaly** — an ONU suddenly sending traffic far above its baseline, which could
+mean the customer's device has been compromised and is being used for bandwidth theft or as
+part of a DDoS.
+
+## How it's built
+
+- `simulator.py` generates telemetry continuously for all 128 ONUs and occasionally injects
+  one of the four scenarios above
+- `db.py` stores everything in SQLite — telemetry, alerts, login attempts
+- `detector.py` is the actual detection logic — some of it is rule-based (fast, catches
+  known patterns), some of it is statistical baseline drift using z-scores (catches things
+  that don't match a known signature but still look wrong)
+- `app.py` serves a Flask REST API on top of all this
+- the dashboard (templates + static JS) shows it live — a PON topology map, a live telemetry
+  table, and an alert feed
+
+I went with rule-based + statistical detection together on purpose, not just one. Rules catch
+what you already thought to check for. The statistical side catches what you didn't. That's
+the same basic idea real intrusion detection systems use, just applied to a part of the
+network almost nothing else is built for.
 
 ## Running it
 
-```bash
+```
 pip install -r requirements.txt
 python app.py
 ```
 
-Open `http://127.0.0.1:5000`. The simulator starts automatically and begins generating
-telemetry immediately; attack scenarios are injected at a configurable probability
-(`attack_probability` in `simulator.py`, default 15% per tick) so alerts appear within the
-first minute without needing to wait.
+Then open http://127.0.0.1:5000. It starts generating data immediately and injects an
+attack scenario roughly every few ticks, so you'll see alerts within the first minute.
 
-## Future work (good material for a research statement)
+## What I'd add next
 
-- Replace the rolling z-score with a trained **Isolation Forest** per ONU class, and compare
-  false-positive rates against the simple statistical baseline.
-- Model **downstream encryption weaknesses**: some GPON deployments don't enforce AES-128 on
-  the downlink by default, which theoretically permits a correctly-positioned rogue ONU to
-  eavesdrop on other subscribers' traffic — worth simulating as a follow-on scenario.
-- Correlate alerts geographically/topologically (e.g. multiple signal-tamper alerts on the
-  same PON port in a short window is a stronger signal than one isolated event).
-- Feed real OLT SNMP/TR-069 telemetry into the same detection engine instead of simulated
-  data, as a bridge from this prototype to a real deployment.
-- Formal evaluation: precision/recall of the detector against labeled injected-attack ground
-  truth (the simulator already knows exactly when and where it injected each scenario, so
-  this is a straightforward next step).
+- Swap the z-score logic for a trained Isolation Forest and actually compare false-positive
+  rates between the two
+- Simulate the encryption-weakness angle too — some GPON deployments don't enforce AES-128 on
+  the downlink, which in theory lets a well-positioned rogue ONU eavesdrop on other
+  subscribers' traffic
+- Correlate alerts across a PON port instead of treating each one in isolation — multiple
+  signal-tamper events on the same port in a short window means a lot more than one alone
+- Eventually feed in real OLT SNMP/TR-069 data instead of simulated data
+- Run a proper precision/recall evaluation against the simulator's own ground truth, since it
+  already knows exactly when and where it injected each attack
 
-## Tech stack
+## Stack
 
-Python, Flask, SQLite, vanilla JS/CSS — deliberately the same stack as the monitoring
-project, so this reads as a natural extension of that work rather than a disconnected
-side-project.
+Python, Flask, SQLite, plain JS/CSS. Same stack as my monitoring project, on purpose — this
+is meant to sit next to that project, not as something unrelated.
