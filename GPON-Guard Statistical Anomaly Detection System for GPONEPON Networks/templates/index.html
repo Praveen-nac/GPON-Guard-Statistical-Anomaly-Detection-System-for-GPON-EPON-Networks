@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPON-Guard — PON Physical-Layer Security Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◈</span>
+    <div class="brand-text">
+      <h1>GPON-Guard</h1>
+      <span class="brand-sub">Physical-Layer Security &amp; Anomaly Detection — PON Access Network</span>
+    </div>
+  </div>
+  <div class="status-pills" id="summary-pills">
+    <div class="pill"><span class="pill-label">ONUs tracked</span><span class="pill-value" id="s-onus">—</span></div>
+    <div class="pill"><span class="pill-label">Alerts (total)</span><span class="pill-value" id="s-alerts">—</span></div>
+    <div class="pill pill-critical"><span class="pill-label">Critical</span><span class="pill-value" id="s-critical">—</span></div>
+    <div class="pill pill-live"><span class="dot-live"></span> LIVE</div>
+  </div>
+</header>
+
+<main class="grid">
+
+  <!-- Topology signature panel -->
+  <section class="panel topology-panel">
+    <h2>PON Topology <span class="panel-hint">1 OLT · 4 ports · 128 ONUs (whitelisted)</span></h2>
+    <svg id="topology-svg" viewBox="0 0 900 260" preserveAspectRatio="xMidYMid meet"></svg>
+    <p class="topology-legend">
+      <span><i class="dot dot-ok"></i> nominal</span>
+      <span><i class="dot dot-warn"></i> drift detected</span>
+      <span><i class="dot dot-crit"></i> active alert</span>
+    </p>
+  </section>
+
+  <!-- ONU telemetry table -->
+  <section class="panel telemetry-panel">
+    <h2>Live ONU Telemetry <span class="panel-hint" id="telemetry-updated">updating…</span></h2>
+    <div class="table-scroll">
+      <table id="onu-table">
+        <thead>
+          <tr>
+            <th>ONU</th><th>Serial</th><th>Rx Power (dBm)</th><th>Temp (°C)</th><th>Voltage (V)</th><th>Traffic (Mbps)</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="onu-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Alert feed -->
+  <section class="panel alert-panel">
+    <h2>Security &amp; Fault Alert Feed <span class="panel-hint" id="alert-updated">updating…</span></h2>
+    <div class="alert-feed" id="alert-feed"></div>
+  </section>
+
+</main>
+
+<footer class="footer-note">
+  Simulated research environment — telemetry and attack scenarios (rogue ONU registration, signal tampering,
+  OLT console brute-force, traffic anomalies) are synthetically generated for detection-engine evaluation.
+  No production network or hardware is accessed.
+</footer>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
