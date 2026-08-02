@@ -85,3 +85,31 @@ attack scenario roughly every few ticks, so you'll see alerts within the first m
 
 Python, Flask, SQLite, plain JS/CSS. Same stack as my monitoring project, on purpose — this
 is meant to sit next to that project, not as something unrelated.
+
+
+
+## Future Work
+
+GPON-Guard is currently a working prototype validated on simulated GPON/EPON 
+traffic. The following directions extend this into more rigorous research:
+
+- **Real hardware validation**: Test detection accuracy against live OLT/ONU 
+  traffic captured from production PON networks, rather than simulated data 
+  only.
+- **Adaptive baselines**: Extend the rolling z-score model to account for 
+  legitimate long-term drift (e.g. seasonal signal variation, aging fiber) 
+  so baselines don't need manual resets.
+- **Machine learning detection layer**: Explore supervised/unsupervised 
+  models (e.g. isolation forests, autoencoders) as a complementary layer to 
+  the current rule-based + statistical approach, to catch attack patterns 
+  that don't fit either method alone.
+- **Scale testing**: Evaluate detection latency and false-positive rate at 
+  carrier scale (thousands of ONUs across multiple OLTs), not just the 
+  128-ONU simulation.
+- **Cross-layer correlation**: Combine physical-layer anomaly signals (this 
+  project) with higher-layer network traffic analysis for more confident 
+  attack attribution.
+
+This roadmap is the basis for the graduate research I intend to pursue — 
+taking physical-layer PON security from a self-built prototype into a 
+formally validated research contribution.
